@@ -17,29 +17,29 @@ const (
     SERVER   = "localhost"
     PORT     = 3306
     DATABASE = ""
-    PREFIX   = ""
+    PREFIX   = "eb_"
 )
 
 var (
     DB sql.DB
 
 )
-type sqlstruct struct{
-    Where []map[string]string
-    Join []string
-    Order string
-    Limit string
-    Alias string
-    Table string
-    Group string
-    Update string
-    Save string
-    Field string
+type Sqlstruct struct{
+    where []map[string]string
+    join []string
+    order string
+    limit string
+    alias string
+    table string
+    group string
+    update string
+    save string
+    field string
     DB sql.DB
     Rows interface{}
     Row interface{}
 }
-var Dbstruct sqlstruct
+var Dbstruct Sqlstruct
 
 func init () {
     Dbstruct.DB = *Connt();
@@ -56,59 +56,64 @@ func Connt () *sql.DB {
     return db
 }
 
-func Table(table string){
-    Dbstruct.Table = PREFIX+table
+func(sqlstruct *Sqlstruct) Table(table string) Sqlstruct {
+    Dbstruct.table = PREFIX+table
+    return Dbstruct
 }
-func Alias(alias string){
-     Dbstruct.Alias = alias
+func(sqlstruct *Sqlstruct) Alias(alias string) Sqlstruct {
+     Dbstruct.alias = alias
+     return Dbstruct
 }
-func Where (wher map[string]string) {
-    Dbstruct.Where = append(Dbstruct.Where,wher)
+func(sqlstruct *Sqlstruct) Where (wher map[string]string) Sqlstruct {
+    Dbstruct.where = append(Dbstruct.where,wher)
+    return Dbstruct
 
 }
-func Order(order string) {
+func(sqlstruct *Sqlstruct) Order(order string) Sqlstruct {
     if order != ""{
-        Dbstruct.Order = " order by " + order
+        Dbstruct.order = " order by " + order
     }
+    return Dbstruct
     
 }
 func GetOrder() string{
-    return Dbstruct.Order
+    return Dbstruct.order
 }
-func Join (join string,r string){
-    Dbstruct.Join = append(Dbstruct.Join,join+" "+r)
+func(sqlstruct *Sqlstruct) Join (join string,r string) Sqlstruct {
+    Dbstruct.join = append(Dbstruct.join,join+" "+r)
+    return Dbstruct
 }
-func Count () {
+func(sqlstruct *Sqlstruct) Count () {
 
 }
-func Field(field string){
+func(sqlstruct *Sqlstruct) Field(field string) Sqlstruct {
     if field != ""{
-        Dbstruct.Field = field
+        Dbstruct.field = field
     }
+    return Dbstruct
 }
 func GetField() string{
-    return Dbstruct.Field
+    return Dbstruct.field
 }
 func SelectSql () string {
     query := ""
-    query += "select " +GetField() + " " + " from " + Dbstruct.Table + Dbstruct.Alias 
+    query += "select " +GetField() + " " + " from " + Dbstruct.table + " "+ Dbstruct.alias 
     query += " "+Getjoin() + " " + Getwhere() + " " + GetOrder() + " " + GetGroup() + " " + GetLimit()
     return query
 }
-func Select (struc interface{}) sqlstruct {
+func(sqlstruct *Sqlstruct) Select (struc interface{}) interface{} {
     query := SelectSql()
     fmt.Println(query)
     rows,err := Dbstruct.DB.Query(query)
     defer func() {
         if rows != nil {
             rows.Close()
-            Dbstruct.Where = Dbstruct.Where[0:0]
+            Dbstruct.where = Dbstruct.where[0:0]
         }
     }()
     if err != nil {
         fmt.Println("Query failed,err:%v", err)
     }
-
 
     result := make([]interface{},0)
     s := reflect.ValueOf(struc).Elem()
@@ -127,24 +132,36 @@ func Select (struc interface{}) sqlstruct {
         }
         result = append(result, s.Interface())
     }
-    //fmt.Printf("%T",result)
-    //return &result
-    Dbstruct.Rows = result
     
-    return Dbstruct
+    return result
 
 }
-func Find () *sql.Row {
+func(sqlstruct *Sqlstruct) Find (find interface{}) interface{} {
     query := SelectSql()
-    row := Dbstruct.DB.QueryRow(query)
+    fmt.Println(query)
+    rows := Dbstruct.DB.QueryRow(query)
     defer func() {
-        if row != nil {
-            Dbstruct.DB.Close()
-        }
+            Dbstruct.where = Dbstruct.where[0:0]
+        
     }()
-    return row
+    result := make([]interface{},0)
+    dest := reflect.ValueOf(find)
+
+    el := dest.Elem()
+    len := el.NumField()
+    vals := make([]interface{},len)
+    for i,_ := range vals{
+        vals[i] = el.Field(i).Addr().Interface()
+    }
+
+    rows.Scan(vals...)
+
+    result = append(result,el.Interface())
+    
+
+    return result
 }
-func Update ( update map[string]string ) sql.Result{
+func(sqlstruct *Sqlstruct) Update ( update map[string]string ) sql.Result{
     params := ""
     if update != nil{
         params := " set " 
@@ -157,7 +174,7 @@ func Update ( update map[string]string ) sql.Result{
             }
         }
     }
-    query := "update "+Dbstruct.Table + params
+    query := "update "+Dbstruct.table + params
     relust,err := Dbstruct.DB.Exec(query)
     if err != nil{
         fmt.Println("Query failed,err:%v", err)
@@ -165,7 +182,7 @@ func Update ( update map[string]string ) sql.Result{
     return relust
 }
 
-func Save (save map[string]string ) sql.Result {
+func(sqlstruct *Sqlstruct) Save (save map[string]string ) sql.Result {
     into,value := "",""
     if save != nil{
         into := " into ( "
@@ -184,8 +201,8 @@ func Save (save map[string]string ) sql.Result {
         value += " ) "
         
     }
-    Dbstruct.Save = into + value
-    query := "insert "+Dbstruct.Table + into + value
+    Dbstruct.save = into + value
+    query := "insert "+Dbstruct.table + into + value
     result,err := Dbstruct.DB.Exec(query)
     if err != nil{
         fmt.Println("Query failed,err:%v", err)
@@ -193,28 +210,28 @@ func Save (save map[string]string ) sql.Result {
     return result
 }
 func GetSave() string{
-    return Dbstruct.Save
+    return Dbstruct.save
 }
-func Del () {
+func(sqlstruct *Sqlstruct) Del () {
 
 }
-func Limit(limit string) {
+func(sqlstruct *Sqlstruct) Limit(limit string) {
     if limit != ""{
-        Dbstruct.Limit = " limit "+ limit +""
+        Dbstruct.limit = " limit "+ limit +""
     }
 }
 func GetLimit() string{
-    return Dbstruct.Limit
+    return Dbstruct.limit
 }
 func Group(group string) {
     if group != ""{
-        Dbstruct.Group = " group by "+group
+        Dbstruct.group = " group by "+group
 
     }
     
 }
 func GetGroup() string{
-    return Dbstruct.Group
+    return Dbstruct.group
 }
 
 func Getwhere() string{
@@ -228,10 +245,13 @@ func Getwhere() string{
 }
 func Getjoin() string{
     join := ""
-    if Dbstruct.Join != nil{
-        params :=  Dbstruct.Join
+    if Dbstruct.join != nil{
+        join += "join "
+        params :=  Dbstruct.join
+
         for key := range params{
             join += params[key]
+
         }
     }
     return join
